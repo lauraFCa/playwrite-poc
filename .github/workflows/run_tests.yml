@@ -1,0 +1,118 @@
+name: Run Selenium Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore .NET dependencies
+        run: dotnet restore
+        working-directory: ${{ github.workspace }}/TestingStuff
+
+      - name: Build solution
+        run: dotnet build --configuration Release --no-restore
+        working-directory: ${{ github.workspace }}/TestingStuff
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: |
+            ${{ github.workspace }}/TestingStuff/bin/
+            ${{ github.workspace }}/TestingStuff/obj/
+
+  test:
+    needs: build
+    runs-on: windows-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output
+          path: ${{ github.workspace }}/TestingStuff/
+
+      - name: Ensure latest Google Chrome is installed
+        run: choco upgrade googlechrome -y --ignore-checksums
+        shell: powershell
+
+      - name: Run tests with retry and generate CSV
+        run: python run_tests.py
+        working-directory: ${{ github.workspace }}/TestingStuff
+        id: run_tests
+
+      - name: List files for debug
+        run: dir
+        working-directory: ${{ github.workspace }}/TestingStuff
+        shell: pwsh
+
+
+      - name: Show test report
+        id: show_test_report
+        run: type test_report.csv
+        working-directory: ${{ github.workspace }}/TestingStuff
+        shell: pwsh
+
+      - name: Show stats report
+        id: show_stats_report
+        run: type test_report_stats.md
+        working-directory: ${{ github.workspace }}/TestingStuff
+        shell: pwsh
+
+      - name: Add Test Result Summary to GitHub Actions summary
+        if: steps.show_stats_report.outcome == 'success'
+        run: |
+          echo "# Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "### Test Results Stats" >> $GITHUB_STEP_SUMMARY
+          cat test_report_stats.md >> $GITHUB_STEP_SUMMARY
+        working-directory: ${{ github.workspace }}/TestingStuff
+        shell: bash
+
+
+      - name: Add test results to GitHub Actions summary
+        if: steps.show_test_report.outcome == 'success'
+        run: |
+          echo "### Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "| Test Name | Status | Attempt Passed | Fail Reason |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|----------------|-------------|" >> $GITHUB_STEP_SUMMARY
+          
+          sed 1d test_report.csv | while IFS= read -r line; do
+            # Extrair os primeiros 3 campos (nome do teste, status, tentativa)
+            test_name=$(echo "$line" | cut -d ',' -f1)
+            status=$(echo "$line" | cut -d ',' -f2)
+            attempt=$(echo "$line" | cut -d ',' -f3)
+            
+            fail_reason=$(echo "$line" | cut -d ',' -f4-)
+            fail_reason=$(echo "$fail_reason" | sed 's/|/\\|/g')
+            
+            echo "| $test_name | $status | $attempt | $fail_reason |" >> $GITHUB_STEP_SUMMARY
+          done
+        shell: bash
+        working-directory: ${{ github.workspace }}/TestingStuff
