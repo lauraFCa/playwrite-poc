@@ -21,19 +21,19 @@ jobs:
 
       - name: Restore .NET dependencies
         run: dotnet restore
-        working-directory: ${{ github.workspace }}/TestingStuff
+        working-directory: ${{ github.workspace }}
 
       - name: Build solution
         run: dotnet build --configuration Release --no-restore
-        working-directory: ${{ github.workspace }}/TestingStuff
+        working-directory: ${{ github.workspace }}
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: build-output
           path: |
-            ${{ github.workspace }}/TestingStuff/bin/
-            ${{ github.workspace }}/TestingStuff/obj/
+            ${{ github.workspace }}/bin/
+            ${{ github.workspace }}/obj/
 
   test:
     needs: build
@@ -57,7 +57,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: build-output
-          path: ${{ github.workspace }}/TestingStuff/
+          path: ${{ github.workspace }}/
 
       - name: Ensure latest Google Chrome is installed
         run: choco upgrade googlechrome -y --ignore-checksums
@@ -65,25 +65,25 @@ jobs:
 
       - name: Run tests with retry and generate CSV
         run: python run_tests.py
-        working-directory: ${{ github.workspace }}/TestingStuff
+        working-directory: ${{ github.workspace }}
         id: run_tests
 
       - name: List files for debug
         run: dir
-        working-directory: ${{ github.workspace }}/TestingStuff
+        working-directory: ${{ github.workspace }}
         shell: pwsh
 
 
       - name: Show test report
         id: show_test_report
         run: type test_report.csv
-        working-directory: ${{ github.workspace }}/TestingStuff
+        working-directory: ${{ github.workspace }}
         shell: pwsh
 
       - name: Show stats report
         id: show_stats_report
         run: type test_report_stats.md
-        working-directory: ${{ github.workspace }}/TestingStuff
+        working-directory: ${{ github.workspace }}
         shell: pwsh
 
       - name: Add Test Result Summary to GitHub Actions summary
@@ -92,7 +92,7 @@ jobs:
           echo "# Test Results" >> $GITHUB_STEP_SUMMARY
           echo "### Test Results Stats" >> $GITHUB_STEP_SUMMARY
           cat test_report_stats.md >> $GITHUB_STEP_SUMMARY
-        working-directory: ${{ github.workspace }}/TestingStuff
+        working-directory: ${{ github.workspace }}
         shell: bash
 
 
@@ -115,4 +115,4 @@ jobs:
             echo "| $test_name | $status | $attempt | $fail_reason |" >> $GITHUB_STEP_SUMMARY
           done
         shell: bash
-        working-directory: ${{ github.workspace }}/TestingStuff
+        working-directory: ${{ github.workspace }}
